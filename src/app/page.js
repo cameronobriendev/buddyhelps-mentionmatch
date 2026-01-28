@@ -18,15 +18,16 @@ export default function Dashboard() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [filter, setFilter] = useState('new');
   const [drafting, setDrafting] = useState(false);
-  const [editedDraft, setEditedDraft] = useState('');
+  const [editedSubject, setEditedSubject] = useState('');
+  const [editedBody, setEditedBody] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [view, setView] = useState('requests'); // 'requests' or 'settings'
+  const [view, setView] = useState('requests');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptSaved, setPromptSaved] = useState(false);
+  const [copiedField, setCopiedField] = useState(null);
 
-  // Check if already authenticated (session storage)
   useEffect(() => {
     const isAuth = sessionStorage.getItem('mm_authenticated');
     if (isAuth === 'true') {
@@ -118,8 +119,9 @@ export default function Dashboard() {
         body: JSON.stringify({ id }),
       });
       const data = await res.json();
-      if (data.draft) {
-        setEditedDraft(data.draft);
+      if (data.success) {
+        setEditedSubject(data.subject || '');
+        setEditedBody(data.body || '');
         const updated = requests.map(r =>
           r.id === id ? { ...r, draft_response: data.draft, status: 'drafting' } : r
         );
@@ -151,7 +153,8 @@ export default function Dashboard() {
 
       if (status === 'skipped') {
         setSelectedRequest(null);
-        setEditedDraft('');
+        setEditedSubject('');
+        setEditedBody('');
       }
 
       fetchRequests();
@@ -174,7 +177,8 @@ export default function Dashboard() {
       setShowDeleteModal(false);
       setDeleteTarget(null);
       setSelectedRequest(null);
-      setEditedDraft('');
+      setEditedSubject('');
+      setEditedBody('');
       fetchRequests();
     } catch (error) {
       console.error('Failed to delete request:', error);
@@ -186,14 +190,29 @@ export default function Dashboard() {
     setShowDeleteModal(true);
   }
 
-  function copyToClipboard(text) {
+  function copyToClipboard(text, field) {
     navigator.clipboard.writeText(text);
-    alert('Copied to clipboard!');
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 1500);
   }
 
   function selectRequest(request) {
     setSelectedRequest(request);
-    setEditedDraft(request.draft_response || '');
+    // Parse existing draft if it has subject/body format
+    if (request.draft_response) {
+      if (request.draft_response.includes('SUBJECT:') && request.draft_response.includes('---')) {
+        const parts = request.draft_response.split('---');
+        const subjectLine = parts[0].trim();
+        setEditedSubject(subjectLine.replace('SUBJECT:', '').trim());
+        setEditedBody(parts.slice(1).join('---').trim());
+      } else {
+        setEditedSubject('');
+        setEditedBody(request.draft_response);
+      }
+    } else {
+      setEditedSubject('');
+      setEditedBody('');
+    }
   }
 
   function formatDate(dateStr) {
@@ -465,36 +484,91 @@ export default function Dashboard() {
             <div className="flex-1 p-6 overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Draft Response</h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => generateDraft(selectedRequest.id)}
-                    disabled={drafting}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors"
-                  >
-                    {drafting ? 'Generating...' : 'Generate with Sonnet'}
-                  </button>
-                </div>
+                <button
+                  onClick={() => generateDraft(selectedRequest.id)}
+                  disabled={drafting}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  {drafting ? 'Generating...' : 'Generate with Sonnet'}
+                </button>
               </div>
 
-              <textarea
-                value={editedDraft}
-                onChange={(e) => setEditedDraft(e.target.value)}
-                placeholder="Draft response will appear here. Click 'Generate with Sonnet' to create a draft, or write your own."
-                className="w-full h-64 bg-white border border-gray-300 rounded-lg p-4 text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              {/* Subject line field */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700">Subject Line</label>
+                  <button
+                    onClick={() => copyToClipboard(editedSubject, 'subject')}
+                    disabled={!editedSubject}
+                    className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 text-gray-600 rounded-md transition-colors flex items-center gap-1"
+                  >
+                    {copiedField === 'subject' ? (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                      </>
+                    )}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={editedSubject}
+                  onChange={(e) => setEditedSubject(e.target.value)}
+                  placeholder="Subject line will appear here..."
+                  className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Email body field */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700">Email Body</label>
+                  <button
+                    onClick={() => copyToClipboard(editedBody, 'body')}
+                    disabled={!editedBody}
+                    className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 text-gray-600 rounded-md transition-colors flex items-center gap-1"
+                  >
+                    {copiedField === 'body' ? (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copy
+                      </>
+                    )}
+                  </button>
+                </div>
+                <textarea
+                  value={editedBody}
+                  onChange={(e) => setEditedBody(e.target.value)}
+                  placeholder="Email body will appear here. Click 'Generate with Sonnet' to create a draft, or write your own."
+                  className="w-full h-56 bg-white border border-gray-300 rounded-lg p-4 text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
 
               {/* Action buttons */}
-              <div className="flex items-center gap-3 mt-4">
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={() => copyToClipboard(editedDraft)}
-                  disabled={!editedDraft}
-                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 text-gray-700 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Copy to Clipboard
-                </button>
-                <button
-                  onClick={() => updateStatus(selectedRequest.id, 'responded', editedDraft)}
-                  disabled={!editedDraft}
+                  onClick={() => updateStatus(selectedRequest.id, 'responded', `SUBJECT: ${editedSubject}\n---\n${editedBody}`)}
+                  disabled={!editedBody}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   Mark as Responded

@@ -19,18 +19,20 @@ export async function POST(request) {
     // Update status to drafting
     await updateRequest(id, { status: 'drafting' });
 
-    // Generate draft with Sonnet
-    const draft = await generateDraftResponse(requestData);
+    // Generate draft with Sonnet (returns { subject, body, full })
+    const result = await generateDraftResponse(requestData);
 
-    // Save draft to DB
+    // Save full draft to DB (for history)
     await updateRequest(id, {
-      draft_response: draft,
+      draft_response: result.full,
       status: 'drafting'
     });
 
     return Response.json({
       success: true,
-      draft
+      subject: result.subject,
+      body: result.body,
+      draft: result.full
     });
 
   } catch (error) {
