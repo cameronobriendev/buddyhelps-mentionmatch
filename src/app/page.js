@@ -3,13 +3,16 @@
 import { useState, useEffect } from 'react';
 
 const STATUS_COLORS = {
-  new: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  drafting: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  responded: 'bg-green-500/20 text-green-400 border-green-500/30',
-  skipped: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  new: 'bg-blue-100 text-blue-700 border-blue-300',
+  drafting: 'bg-yellow-100 text-yellow-700 border-yellow-300',
+  responded: 'bg-green-100 text-green-700 border-green-300',
+  skipped: 'bg-gray-100 text-gray-600 border-gray-300',
 };
 
 export default function Dashboard() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState('');
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -17,9 +20,42 @@ export default function Dashboard() {
   const [drafting, setDrafting] = useState(false);
   const [editedDraft, setEditedDraft] = useState('');
 
+  // Check if already authenticated (session storage)
   useEffect(() => {
-    fetchRequests();
-  }, [filter]);
+    const isAuth = sessionStorage.getItem('mm_authenticated');
+    if (isAuth === 'true') {
+      setAuthenticated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authenticated) {
+      fetchRequests();
+    }
+  }, [filter, authenticated]);
+
+  async function handlePinSubmit(e) {
+    e.preventDefault();
+    setPinError('');
+
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      });
+
+      if (res.ok) {
+        sessionStorage.setItem('mm_authenticated', 'true');
+        setAuthenticated(true);
+      } else {
+        setPinError('Invalid PIN');
+        setPin('');
+      }
+    } catch (error) {
+      setPinError('Error verifying PIN');
+    }
+  }
 
   async function fetchRequests() {
     setLoading(true);
@@ -45,7 +81,6 @@ export default function Dashboard() {
       const data = await res.json();
       if (data.draft) {
         setEditedDraft(data.draft);
-        // Refresh the selected request
         const updated = requests.map(r =>
           r.id === id ? { ...r, draft_response: data.draft, status: 'drafting' } : r
         );
@@ -104,12 +139,44 @@ export default function Dashboard() {
     });
   }
 
+  // PIN entry screen
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-200 w-full max-w-sm">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2 text-center">MentionMatch</h1>
+          <p className="text-gray-500 text-center mb-6">Enter PIN to access dashboard</p>
+
+          <form onSubmit={handlePinSubmit}>
+            <input
+              type="password"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="Enter PIN"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoFocus
+            />
+            {pinError && (
+              <p className="text-red-500 text-sm text-center mt-2">{pinError}</p>
+            )}
+            <button
+              type="submit"
+              className="w-full mt-4 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+            >
+              Enter
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex">
       {/* Sidebar - Request List */}
-      <div className="w-96 border-r border-gray-800 flex flex-col">
-        <div className="p-4 border-b border-gray-800">
-          <h1 className="text-xl font-bold mb-4">MentionMatch</h1>
+      <div className="w-96 border-r border-gray-200 bg-white flex flex-col">
+        <div className="p-4 border-b border-gray-200">
+          <h1 className="text-xl font-bold text-gray-900 mb-4">MentionMatch</h1>
 
           {/* Filter tabs */}
           <div className="flex gap-2 flex-wrap">
@@ -119,8 +186,8 @@ export default function Dashboard() {
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1 rounded-full text-sm capitalize transition-colors ${
                   filter === f
-                    ? 'bg-white text-black'
-                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 {f}
@@ -140,12 +207,12 @@ export default function Dashboard() {
               <div
                 key={req.id}
                 onClick={() => selectRequest(req)}
-                className={`p-4 border-b border-gray-800 cursor-pointer hover:bg-gray-900 transition-colors ${
-                  selectedRequest?.id === req.id ? 'bg-gray-900' : ''
+                className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+                  selectedRequest?.id === req.id ? 'bg-blue-50' : ''
                 }`}
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3 className="font-medium text-gray-100 line-clamp-1">
+                  <h3 className="font-medium text-gray-900 line-clamp-1">
                     {req.request_topic || 'No topic'}
                   </h3>
                   <span
@@ -154,10 +221,10 @@ export default function Dashboard() {
                     {req.status}
                   </span>
                 </div>
-                <p className="text-sm text-gray-400 line-clamp-2 mb-2">
+                <p className="text-sm text-gray-500 line-clamp-2 mb-2">
                   {req.request_details || 'No details'}
                 </p>
-                <div className="flex items-center gap-3 text-xs text-gray-500">
+                <div className="flex items-center gap-3 text-xs text-gray-400">
                   <span>{req.publication || 'Unknown'}</span>
                   <span>{formatDate(req.created_at)}</span>
                 </div>
@@ -168,20 +235,20 @@ export default function Dashboard() {
       </div>
 
       {/* Main content - Request detail */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col bg-gray-50">
         {selectedRequest ? (
           <>
-            <div className="p-6 border-b border-gray-800">
+            <div className="p-6 border-b border-gray-200 bg-white">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h2 className="text-2xl font-bold mb-2">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
                     {selectedRequest.request_topic || 'No topic'}
                   </h2>
-                  <div className="flex items-center gap-4 text-gray-400">
+                  <div className="flex items-center gap-4 text-gray-500">
                     <span>{selectedRequest.writer_name || 'Unknown writer'}</span>
                     <span>{selectedRequest.publication || 'Unknown publication'}</span>
                     {selectedRequest.deadline && (
-                      <span className="text-orange-400">
+                      <span className="text-orange-600">
                         Deadline: {selectedRequest.deadline}
                       </span>
                     )}
@@ -195,23 +262,23 @@ export default function Dashboard() {
               </div>
 
               {/* Request details */}
-              <div className="bg-gray-900 rounded-lg p-4 mb-4">
-                <h3 className="text-sm font-medium text-gray-400 mb-2">Request Details</h3>
-                <p className="text-gray-100 whitespace-pre-wrap">
+              <div className="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Request Details</h3>
+                <p className="text-gray-800 whitespace-pre-wrap">
                   {selectedRequest.request_details || 'No details provided'}
                 </p>
                 {selectedRequest.expertise_needed && (
-                  <div className="mt-3 pt-3 border-t border-gray-800">
-                    <span className="text-sm text-gray-400">Expertise needed: </span>
-                    <span className="text-gray-200">{selectedRequest.expertise_needed}</span>
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <span className="text-sm text-gray-500">Expertise needed: </span>
+                    <span className="text-gray-700">{selectedRequest.expertise_needed}</span>
                   </div>
                 )}
               </div>
 
               {/* Contact info */}
               {selectedRequest.writer_email && (
-                <div className="text-sm text-gray-400">
-                  Contact: <a href={`mailto:${selectedRequest.writer_email}`} className="text-blue-400 hover:underline">{selectedRequest.writer_email}</a>
+                <div className="text-sm text-gray-500">
+                  Contact: <a href={`mailto:${selectedRequest.writer_email}`} className="text-blue-600 hover:underline">{selectedRequest.writer_email}</a>
                 </div>
               )}
             </div>
@@ -219,12 +286,12 @@ export default function Dashboard() {
             {/* Draft response section */}
             <div className="flex-1 p-6 overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium">Draft Response</h3>
+                <h3 className="text-lg font-medium text-gray-900">Draft Response</h3>
                 <div className="flex gap-2">
                   <button
                     onClick={() => generateDraft(selectedRequest.id)}
                     disabled={drafting}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-medium transition-colors"
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:text-gray-500 text-white rounded-lg text-sm font-medium transition-colors"
                   >
                     {drafting ? 'Generating...' : 'Generate with Sonnet'}
                   </button>
@@ -235,7 +302,7 @@ export default function Dashboard() {
                 value={editedDraft}
                 onChange={(e) => setEditedDraft(e.target.value)}
                 placeholder="Draft response will appear here. Click 'Generate with Sonnet' to create a draft, or write your own."
-                className="w-full h-64 bg-gray-900 border border-gray-700 rounded-lg p-4 text-gray-100 placeholder-gray-500 resize-none focus:outline-none focus:border-gray-600"
+                className="w-full h-64 bg-white border border-gray-300 rounded-lg p-4 text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
 
               {/* Action buttons */}
@@ -243,20 +310,20 @@ export default function Dashboard() {
                 <button
                   onClick={() => copyToClipboard(editedDraft)}
                   disabled={!editedDraft}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 rounded-lg text-sm font-medium transition-colors"
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 text-gray-700 rounded-lg text-sm font-medium transition-colors"
                 >
                   Copy to Clipboard
                 </button>
                 <button
                   onClick={() => updateStatus(selectedRequest.id, 'responded', editedDraft)}
                   disabled={!editedDraft}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-800 disabled:text-gray-600 rounded-lg text-sm font-medium transition-colors"
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   Mark as Responded
                 </button>
                 <button
                   onClick={() => updateStatus(selectedRequest.id, 'skipped')}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors text-gray-400"
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors text-gray-600"
                 >
                   Skip
                 </button>
@@ -264,9 +331,9 @@ export default function Dashboard() {
 
               {/* Final response if exists */}
               {selectedRequest.final_response && (
-                <div className="mt-6 p-4 bg-green-900/20 border border-green-800/30 rounded-lg">
-                  <h4 className="text-sm font-medium text-green-400 mb-2">Final Response Sent</h4>
-                  <p className="text-gray-300 whitespace-pre-wrap text-sm">
+                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <h4 className="text-sm font-medium text-green-700 mb-2">Final Response Sent</h4>
+                  <p className="text-gray-700 whitespace-pre-wrap text-sm">
                     {selectedRequest.final_response}
                   </p>
                   {selectedRequest.responded_at && (
@@ -279,7 +346,7 @@ export default function Dashboard() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">
+          <div className="flex-1 flex items-center justify-center text-gray-400">
             Select a request to view details
           </div>
         )}
