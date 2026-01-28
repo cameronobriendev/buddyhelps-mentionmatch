@@ -23,8 +23,8 @@ export async function POST(request) {
       writer_name: payload.writer_name || payload.writerName || payload.name || null,
       writer_email: payload.writer_email || payload.writerEmail || payload.email || null,
       publication: payload.publication || payload.outlet || payload.media || null,
-      request_topic: payload.topic || payload.subject || payload.title || null,
-      request_details: payload.details || payload.description || payload.query || payload.request || null,
+      request_topic: payload.request_topic || payload.topic || payload.subject || payload.title || null,
+      request_details: payload.request_details || payload.details || payload.description || payload.query || payload.request || null,
       deadline: payload.deadline || payload.due_date || payload.dueDate || null,
       expertise_needed: payload.expertise || payload.expertise_needed || payload.tags || null,
       raw_payload: payload
