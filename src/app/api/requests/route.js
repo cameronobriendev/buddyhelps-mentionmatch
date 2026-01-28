@@ -1,4 +1,4 @@
-import { getRequests, updateRequest } from '@/lib/db';
+import { getRequests, updateRequest, deleteRequest } from '@/lib/db';
 
 // GET all requests
 export async function GET(request) {
@@ -48,6 +48,36 @@ export async function PATCH(request) {
     console.error('Error updating request:', error);
     return Response.json({
       error: 'Failed to update request',
+      message: error.message
+    }, { status: 500 });
+  }
+}
+
+// DELETE a request
+export async function DELETE(request) {
+  try {
+    const body = await request.json();
+    const { id } = body;
+
+    if (!id) {
+      return Response.json({ error: 'Request ID required' }, { status: 400 });
+    }
+
+    const rowsAffected = await deleteRequest(id);
+
+    if (rowsAffected === 0) {
+      return Response.json({ error: 'Request not found' }, { status: 404 });
+    }
+
+    return Response.json({
+      success: true,
+      message: 'Request deleted'
+    });
+
+  } catch (error) {
+    console.error('Error deleting request:', error);
+    return Response.json({
+      error: 'Failed to delete request',
       message: error.message
     }, { status: 500 });
   }

@@ -94,3 +94,13 @@ export async function updateRequest(id, updates) {
 
   return result.rowsAffected;
 }
+
+// Delete request
+export async function deleteRequest(id) {
+  const db = getDb();
+  const result = await db.execute({
+    sql: 'DELETE FROM requests WHERE id = ?',
+    args: [id]
+  });
+  return result.rowsAffected;
+}

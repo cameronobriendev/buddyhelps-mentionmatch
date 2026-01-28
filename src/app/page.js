@@ -16,9 +16,11 @@ export default function Dashboard() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('new');
   const [drafting, setDrafting] = useState(false);
   const [editedDraft, setEditedDraft] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Check if already authenticated (session storage)
   useEffect(() => {
@@ -60,7 +62,7 @@ export default function Dashboard() {
   async function fetchRequests() {
     setLoading(true);
     try {
-      const url = filter === 'all' ? '/api/requests' : `/api/requests?status=${filter}`;
+      const url = `/api/requests?status=${filter}`;
       const res = await fetch(url);
       const data = await res.json();
       setRequests(data.requests || []);
@@ -110,13 +112,42 @@ export default function Dashboard() {
         body: JSON.stringify(body),
       });
 
+      // If skipping, clear selection and refresh
+      if (status === 'skipped') {
+        setSelectedRequest(null);
+        setEditedDraft('');
+      }
+
       fetchRequests();
-      if (selectedRequest?.id === id) {
+      if (selectedRequest?.id === id && status !== 'skipped') {
         setSelectedRequest({ ...selectedRequest, status, final_response: finalResponse });
       }
     } catch (error) {
       console.error('Failed to update status:', error);
     }
+  }
+
+  async function deleteRequest(id) {
+    try {
+      await fetch('/api/requests', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+      setSelectedRequest(null);
+      setEditedDraft('');
+      fetchRequests();
+    } catch (error) {
+      console.error('Failed to delete request:', error);
+    }
+  }
+
+  function confirmDelete(request) {
+    setDeleteTarget(request);
+    setShowDeleteModal(true);
   }
 
   function copyToClipboard(text) {
@@ -173,6 +204,38 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen flex">
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Request?</h3>
+            <p className="text-gray-600 mb-4">
+              Are you sure you want to delete this request from <strong>{deleteTarget.publication || 'Unknown'}</strong>?
+            </p>
+            <p className="text-sm text-gray-500 mb-6 bg-gray-50 p-3 rounded-lg">
+              "{deleteTarget.request_topic || 'No topic'}"
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteTarget(null);
+                }}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteRequest(deleteTarget.id)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar - Request List */}
       <div className="w-96 border-r border-gray-200 bg-white flex flex-col">
         <div className="p-4 border-b border-gray-200">
@@ -180,7 +243,7 @@ export default function Dashboard() {
 
           {/* Filter tabs */}
           <div className="flex gap-2 flex-wrap">
-            {['all', 'new', 'drafting', 'responded', 'skipped'].map((f) => (
+            {['new', 'drafting', 'responded', 'skipped'].map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -190,7 +253,7 @@ export default function Dashboard() {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {f}
+                {f === 'skipped' ? 'archive' : f}
               </button>
             ))}
           </div>
@@ -201,7 +264,9 @@ export default function Dashboard() {
           {loading ? (
             <div className="p-4 text-gray-500">Loading...</div>
           ) : requests.length === 0 ? (
-            <div className="p-4 text-gray-500">No requests found</div>
+            <div className="p-4 text-gray-500">
+              {filter === 'new' ? 'No new requests' : `No ${filter === 'skipped' ? 'archived' : filter} requests`}
+            </div>
           ) : (
             requests.map((req) => (
               <div
@@ -218,7 +283,7 @@ export default function Dashboard() {
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs border ${STATUS_COLORS[req.status]}`}
                   >
-                    {req.status}
+                    {req.status === 'skipped' ? 'archived' : req.status}
                   </span>
                 </div>
                 <p className="text-sm text-gray-500 line-clamp-2 mb-2">
@@ -254,11 +319,26 @@ export default function Dashboard() {
                     )}
                   </div>
                 </div>
-                <span
-                  className={`px-3 py-1 rounded-full text-sm border ${STATUS_COLORS[selectedRequest.status]}`}
-                >
-                  {selectedRequest.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm border ${STATUS_COLORS[selectedRequest.status]}`}
+                  >
+                    {selectedRequest.status === 'skipped' ? 'archived' : selectedRequest.status}
+                  </span>
+                  <button
+                    onClick={() => confirmDelete(selectedRequest)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18"></path>
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                      <line x1="10" y1="11" x2="10" y2="17"></line>
+                      <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                  </button>
+                </div>
               </div>
 
               {/* Request details */}
@@ -325,7 +405,7 @@ export default function Dashboard() {
                   onClick={() => updateStatus(selectedRequest.id, 'skipped')}
                   className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors text-gray-600"
                 >
-                  Skip
+                  Archive
                 </button>
               </div>
 
