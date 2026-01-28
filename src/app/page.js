@@ -21,6 +21,10 @@ export default function Dashboard() {
   const [editedDraft, setEditedDraft] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [view, setView] = useState('requests'); // 'requests' or 'settings'
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptSaved, setPromptSaved] = useState(false);
 
   // Check if already authenticated (session storage)
   useEffect(() => {
@@ -31,10 +35,16 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (authenticated) {
+    if (authenticated && view === 'requests') {
       fetchRequests();
     }
-  }, [filter, authenticated]);
+  }, [filter, authenticated, view]);
+
+  useEffect(() => {
+    if (authenticated && view === 'settings') {
+      fetchPrompt();
+    }
+  }, [authenticated, view]);
 
   async function handlePinSubmit(e) {
     e.preventDefault();
@@ -70,6 +80,33 @@ export default function Dashboard() {
       console.error('Failed to fetch requests:', error);
     }
     setLoading(false);
+  }
+
+  async function fetchPrompt() {
+    setPromptLoading(true);
+    try {
+      const res = await fetch('/api/settings?key=system_prompt');
+      const data = await res.json();
+      setSystemPrompt(data.value || '');
+    } catch (error) {
+      console.error('Failed to fetch prompt:', error);
+    }
+    setPromptLoading(false);
+  }
+
+  async function savePrompt() {
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'system_prompt', value: systemPrompt }),
+      });
+      setPromptSaved(true);
+      setTimeout(() => setPromptSaved(false), 2000);
+    } catch (error) {
+      console.error('Failed to save prompt:', error);
+      alert('Failed to save prompt');
+    }
   }
 
   async function generateDraft(id) {
@@ -112,7 +149,6 @@ export default function Dashboard() {
         body: JSON.stringify(body),
       });
 
-      // If skipping, clear selection and refresh
       if (status === 'skipped') {
         setSelectedRequest(null);
         setEditedDraft('');
@@ -202,6 +238,56 @@ export default function Dashboard() {
     );
   }
 
+  // Settings view
+  if (view === 'settings') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-4xl mx-auto p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">Prompt Settings</h1>
+            <button
+              onClick={() => setView('requests')}
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              Back to Requests
+            </button>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              System Prompt for Sonnet
+            </label>
+            <p className="text-sm text-gray-500 mb-4">
+              This prompt is sent to Claude Sonnet when generating draft responses. Changes take effect immediately.
+            </p>
+
+            {promptLoading ? (
+              <div className="h-96 flex items-center justify-center text-gray-500">Loading...</div>
+            ) : (
+              <textarea
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                className="w-full h-96 bg-gray-50 border border-gray-300 rounded-lg p-4 text-gray-800 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            )}
+
+            <div className="flex items-center gap-3 mt-4">
+              <button
+                onClick={savePrompt}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Save Prompt
+              </button>
+              {promptSaved && (
+                <span className="text-green-600 text-sm">Saved!</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex">
       {/* Delete Confirmation Modal */}
@@ -239,7 +325,19 @@ export default function Dashboard() {
       {/* Sidebar - Request List */}
       <div className="w-96 border-r border-gray-200 bg-white flex flex-col">
         <div className="p-4 border-b border-gray-200">
-          <h1 className="text-xl font-bold text-gray-900 mb-4">MentionMatch</h1>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-xl font-bold text-gray-900">MentionMatch</h1>
+            <button
+              onClick={() => setView('settings')}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Settings"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+            </button>
+          </div>
 
           {/* Filter tabs */}
           <div className="flex gap-2 flex-wrap">

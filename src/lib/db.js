@@ -104,3 +104,22 @@ export async function deleteRequest(id) {
   });
   return result.rowsAffected;
 }
+
+// Get setting by key
+export async function getSetting(key) {
+  const db = getDb();
+  const result = await db.execute({
+    sql: 'SELECT value FROM settings WHERE key = ?',
+    args: [key]
+  });
+  return result.rows[0]?.value || null;
+}
+
+// Update setting
+export async function setSetting(key, value) {
+  const db = getDb();
+  await db.execute({
+    sql: `INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))`,
+    args: [key, value]
+  });
+}
